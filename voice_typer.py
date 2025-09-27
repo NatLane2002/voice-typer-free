@@ -336,10 +336,20 @@ class VoiceTyper:
                 requests = (speech.StreamingRecognizeRequest(audio_content=chunk) 
                            for chunk in audio_generator)
                 
+                # Use streaming recognition with proper error handling
                 responses = self.speech_client.streaming_recognize(streaming_config, requests)
+                
+                # Process responses with timeout protection
+                response_count = 0
+                max_responses_per_cycle = 100  # Prevent infinite loops
                 
                 for response in responses:
                     if not self.recognizing:
+                        break
+                    
+                    response_count += 1
+                    if response_count > max_responses_per_cycle:
+                        logger.info("Response limit reached, restarting stream to prevent lag")
                         break
                     
                     # Check if we need to restart stream during processing
@@ -362,6 +372,9 @@ class VoiceTyper:
                     time.time() - self.stream_start_time >= self.max_stream_duration):
                     self._restart_stream()
                     continue
+                
+                # Add small delay between recognition cycles to prevent CPU overload
+                time.sleep(0.1)
                 
                 # If we exit normally (not due to duration limit), break the main loop
                 break
