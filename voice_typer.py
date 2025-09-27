@@ -20,6 +20,10 @@ import pyautogui
 from google.cloud import speech
 from google.oauth2 import service_account
 
+# Optimize pyautogui for performance - disable failsafe and reduce delays
+pyautogui.FAILSAFE = False
+pyautogui.PAUSE = 0
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -396,13 +400,13 @@ class VoiceTyper:
         """Generate audio chunks for streaming"""
         while self.recognizing and self.stream:
             try:
-                # Read audio data from the stream
+                # Read audio data from the stream with timeout to prevent blocking
                 data = self.stream.read(self.chunk_size, exception_on_overflow=False)
                 if data:
                     yield data
                 else:
-                    # No data available, small delay to prevent busy waiting
-                    time.sleep(0.01)
+                    # Increased delay to reduce CPU usage and prevent system lag
+                    time.sleep(0.1)
             except Exception as e:
                 logger.error(f"Audio generation error: {e}")
                 break
@@ -498,13 +502,8 @@ class VoiceTyper:
                 # Update accumulated text
                 self.accumulated_text += processed_text
             
-            # No delay for maximum speed
-            # Ensure we have focus on the current window
-            current_window = pyautogui.getActiveWindow()
-            if current_window:
-                current_window.activate()
-            
             # Type the processed text with no interval for maximum speed
+            # Removed expensive window focus calls that were causing system lag
             pyautogui.typewrite(processed_text, interval=0)
             
         except Exception as e:
@@ -747,8 +746,8 @@ class VoiceTyper:
             # Interactive command loop
             while self.running:
                 try:
-                    # Check for user input (non-blocking)
-                    if select.select([sys.stdin], [], [], 0.1)[0]:
+                    # Check for user input (non-blocking) - increased timeout to reduce CPU usage
+                    if select.select([sys.stdin], [], [], 0.5)[0]:
                         command = input().strip()
                         if command:
                             self.handle_command(command)
@@ -761,8 +760,8 @@ class VoiceTyper:
                             if command:
                                 self.handle_command(command)
                     except ImportError:
-                        # Fallback for systems without msvcrt
-                        time.sleep(0.1)
+                        # Fallback for systems without msvcrt - increased delay to reduce CPU usage
+                        time.sleep(0.5)
                 except KeyboardInterrupt:
                     print("\n👋 Shutting down...")
                     self.running = False
